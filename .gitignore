@@ -47,15 +47,3 @@ auth/.htpasswd
 # Backup files
 *.backup
 *.bak
-
-# SonarQube generated data (these are auto-generated)
-sonarqube/
-.sonar/
-.scannerwork/
-
-# Git repositories data
-git-repos/
-gitea/
-
-# Docker volumes data
-postgresql_data/
