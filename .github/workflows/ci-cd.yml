@@ -23,19 +23,19 @@ jobs:
       run: sleep 30
     
     - name: Test web server
-      run: curl -f http://localhost/health
+      run: curl -f http://127.0.0.1/health
     
     - name: Test homepage
-      run: curl -f http://localhost/
+      run: curl -f http://127.0.0.1/
     
     - name: Test Git server
-      run: curl -f http://localhost:3000/
+      run: curl -f http://127.0.0.1:3000/
     
     - name: Check security features
       run: |
-        curl -s http://localhost/ | grep -q "SecurityValidator"
-        curl -s http://localhost/ | grep -q "XSS_PATTERNS"
-        curl -s http://localhost/ | grep -q "SQL_PATTERNS"
+        curl -s http://127.0.0.1/ | grep -q "SecurityValidator"
+        curl -s http://127.0.0.1/ | grep -q "XSS_PATTERNS"
+        curl -s http://127.0.0.1/ | grep -q "SQL_PATTERNS"
     
     - name: Cleanup
       if: always()
