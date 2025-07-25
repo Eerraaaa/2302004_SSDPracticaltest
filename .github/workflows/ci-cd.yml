@@ -1,0 +1,42 @@
+name: Simple CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Create directories
+      run: mkdir -p git-repos gitea scripts auth
+    
+    - name: Start services
+      run: docker compose up -d
+    
+    - name: Wait for services
+      run: sleep 30
+    
+    - name: Test web server
+      run: curl -f http://localhost/health
+    
+    - name: Test homepage
+      run: curl -f http://localhost/
+    
+    - name: Test Git server
+      run: curl -f http://localhost:3000/
+    
+    - name: Check security features
+      run: |
+        curl -s http://localhost/ | grep -q "SecurityValidator"
+        curl -s http://localhost/ | grep -q "XSS_PATTERNS"
+        curl -s http://localhost/ | grep -q "SQL_PATTERNS"
+    
+    - name: Cleanup
+      if: always()
+      run: docker compose down -v
