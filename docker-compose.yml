@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  webserver:
+    image: nginx:alpine
+    container_name: sit_webserver
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./html:/usr/share/nginx/html:ro
+    restart: unless-stopped
+    networks:
+      - webnet
+    environment:
+      - NGINX_USER=admin
+      - NGINX_PASSWORD=2302004@SIT.singaporetech.edu.sg
+    command: >
+      sh -c "
+        apk add --no-cache apache2-utils &&
+        mkdir -p /etc/nginx &&
+        htpasswd -cb /etc/nginx/.htpasswd admin '2302004@SIT.singaporetech.edu.sg' &&
+        nginx -g 'daemon off;'
+      "
+
+  gitserver:
+    image: gitea/gitea:latest
+    container_name: sit_gitserver
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__database__PATH=/data/gitea/gitea.db
+      - GITEA__server__DOMAIN=localhost
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__server__ROOT_URL=http://localhost:3000/
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__admin__INSTALL_LOCK=true
+    restart: unless-stopped
+    networks:
+      - webnet
+    volumes:
+      - ./gitea:/data
+    ports:
+      - "3000:3000"
+      - "222:22"
+
+  git-init:
+    image: alpine/git:latest
+    container_name: git_init_setup
+    volumes:
+      - ./git-repos:/git-repos
+      - ./scripts:/scripts
+    working_dir: /git-repos
+    command: >
+      sh -c "
+        echo 'Setting up Git configuration...' &&
+        git config --global user.name 'Loke-Yin-Er' &&
+        git config --global user.email '2302004@sit.singaporetech.edu.sg' &&
+        git config --global init.defaultBranch main &&
+        echo 'Git configuration completed' &&
+        echo 'User: $(git config --global user.name)' &&
+        echo 'Email: $(git config --global user.email)' &&
+        
+        if [ ! -d '2302004_SSDPracticaltest' ]; then
+          echo 'Initializing repository...' &&
+          mkdir -p 2302004_SSDPracticaltest &&
+          cd 2302004_SSDPracticaltest &&
+          git init &&
+          echo '# SIT SSD Practical Test Repository' > README.md &&
+          echo 'This is the local Git server repository for SIT SSD Practical Test' >> README.md &&
+          echo '' >> README.md &&
+          echo 'Git Configuration:' >> README.md &&
+          echo '- Username: Loke-Yin-Er' >> README.md &&
+          echo '- Email: 2302004@sit.singaporetech.edu.sg' >> README.md &&
+          git add README.md &&
+          git commit -m 'Initial commit with Git configuration' &&
+          echo 'Repository initialized successfully'
+        else
+          echo 'Repository already exists'
+        fi &&
+        
+        echo 'Git server setup completed!' &&
+        sleep 30
+      "
+    networks:
+      - webnet
+    depends_on:
+      - gitserver
+
+networks:
+  webnet:
+    driver: bridge
+
+volumes:
+  gitea_data:
+    driver: local

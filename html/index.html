@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIT Secure Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .info {
+            color: #333;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SIT Secure Search Application</h1>
+        
+        <div id="errorMessage" class="error" style="display: none;"></div>
+        
+        <form id="searchForm">
+            <div class="form-group">
+                <label for="searchTerm">Enter Search Term:</label>
+                <input type="text" id="searchTerm" name="searchTerm" required>
+            </div>
+            <button type="submit">Search</button>
+        </form>
+        
+        <div class="info">
+            <strong>Security Features:</strong>
+            <ul>
+                <li>XSS Attack Prevention (OWASP C5)</li>
+                <li>SQL Injection Prevention</li>
+                <li>Input Validation & Sanitization</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // OWASP Top 10 Proactive Control C5: Validate All Inputs
+        class SecurityValidator {
+            
+            // XSS detection patterns
+            static XSS_PATTERNS = [
+                /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+                /javascript:/gi,
+                /on\w+\s*=/gi,
+                /<iframe/gi,
+                /<object/gi,
+                /<embed/gi,
+                /<form/gi,
+                /vbscript:/gi,
+                /data:text\/html/gi,
+                /expression\s*\(/gi
+            ];
+            
+            // SQL injection detection patterns
+            static SQL_PATTERNS = [
+                /(\bUNION\b|\bSELECT\b|\bINSERT\b|\bDELETE\b|\bUPDATE\b|\bDROP\b|\bCREATE\b|\bALTER\b)/gi,
+                /(\bOR\b|\bAND\b)\s+\d+\s*=\s*\d+/gi,
+                /'\s*(OR|AND)\s*'.*?'=/gi,
+                /--/g,
+                /\/\*/g,
+                /\*\//g,
+                /;\s*(DROP|DELETE|UPDATE|INSERT)/gi,
+                /'\s*;\s*\w+/gi
+            ];
+            
+            static isXSSAttack(input) {
+                return this.XSS_PATTERNS.some(pattern => pattern.test(input));
+            }
+            
+            static isSQLInjection(input) {
+                return this.SQL_PATTERNS.some(pattern => pattern.test(input));
+            }
+            
+            static sanitizeInput(input) {
+                return input
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#x27;')
+                    .trim();
+            }
+            
+            static validateInput(input) {
+                if (!input || input.length === 0) {
+                    return { valid: false, error: 'Search term cannot be empty.' };
+                }
+                
+                if (input.length > 100) {
+                    return { valid: false, error: 'Search term too long (max 100 characters).' };
+                }
+                
+                if (this.isXSSAttack(input)) {
+                    return { valid: false, error: 'XSS attack detected! Input cleared for security.' };
+                }
+                
+                if (this.isSQLInjection(input)) {
+                    return { valid: false, error: 'SQL injection attack detected! Input cleared for security.' };
+                }
+                
+                return { valid: true, sanitized: this.sanitizeInput(input) };
+            }
+        }
+        
+        document.getElementById('searchForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const searchInput = document.getElementById('searchTerm');
+            const errorDiv = document.getElementById('errorMessage');
+            const inputValue = searchInput.value;
+            
+            const validation = SecurityValidator.validateInput(inputValue);
+            
+            if (!validation.valid) {
+                // Clear input and show error
+                searchInput.value = '';
+                errorDiv.textContent = validation.error;
+                errorDiv.style.display = 'block';
+                
+                // Hide error after 5 seconds
+                setTimeout(() => {
+                    errorDiv.style.display = 'none';
+                }, 5000);
+                
+                return;
+            }
+            
+            // Valid input - redirect to results page
+            const encodedTerm = encodeURIComponent(validation.sanitized);
+            window.location.href = `results.html?q=${encodedTerm}`;
+        });
+        
+        // Clear error message when user starts typing
+        document.getElementById('searchTerm').addEventListener('input', function() {
+            document.getElementById('errorMessage').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
