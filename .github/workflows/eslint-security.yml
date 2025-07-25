@@ -1,0 +1,292 @@
+name: ESLint Security Scanning
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  eslint-security:
+    name: ESLint Security Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Create package.json for ESLint
+      run: |
+        cat > package.json << 'EOF'
+        {
+          "name": "sit-security-scan",
+          "version": "1.0.0",
+          "description": "SIT Security Scanning",
+          "devDependencies": {
+            "eslint": "^8.50.0",
+            "eslint-plugin-security": "^1.7.1"
+          },
+          "scripts": {
+            "lint": "eslint extracted-js/ --ext .js",
+            "lint:security": "eslint extracted-js/ --ext .js --config .eslintrc-security.json"
+          }
+        }
+        EOF
+    
+    - name: Create ESLint security config
+      run: |
+        cat > .eslintrc-security.json << 'EOF'
+        {
+          "env": {
+            "browser": true,
+            "es2021": true
+          },
+          "extends": [
+            "eslint:recommended"
+          ],
+          "plugins": [
+            "security"
+          ],
+          "rules": {
+            "security/detect-unsafe-regex": "error",
+            "security/detect-buffer-noassert": "error",
+            "security/detect-child-process": "error",
+            "security/detect-disable-mustache-escape": "error",
+            "security/detect-eval-with-expression": "error",
+            "security/detect-no-csrf-before-method-override": "error",
+            "security/detect-non-literal-fs-filename": "error",
+            "security/detect-non-literal-regexp": "error",
+            "security/detect-non-literal-require": "error",
+            "security/detect-object-injection": "error",
+            "security/detect-possible-timing-attacks": "error",
+            "security/detect-pseudoRandomBytes": "error",
+            "no-eval": "error",
+            "no-implied-eval": "error",
+            "no-new-func": "error",
+            "no-script-url": "error"
+          },
+          "parserOptions": {
+            "ecmaVersion": 2021,
+            "sourceType": "script"
+          }
+        }
+        EOF
+    
+    - name: Install ESLint dependencies
+      run: npm install
+    
+    - name: Extract JavaScript from HTML files
+      run: |
+        mkdir -p extracted-js
+        
+        echo "🔍 Extracting JavaScript from HTML files..."
+        
+        # Extract JavaScript from HTML files for ESLint scanning
+        find html/ -name "*.html" -type f | while read file; do
+          echo "Processing $file..."
+          basename=$(basename "$file" .html)
+          
+          # Extract JavaScript code between <script> tags
+          awk '/<script[^>]*>/{flag=1; next} /<\/script>/{flag=0} flag' "$file" > "extracted-js/$basename.js"
+          
+          # If file has content, keep it
+          if [ -s "extracted-js/$basename.js" ]; then
+            echo "✅ Extracted JavaScript from $file"
+            echo "   Lines: $(wc -l < "extracted-js/$basename.js")"
+          else
+            rm -f "extracted-js/$basename.js"
+            echo "ℹ️  No JavaScript found in $file"
+          fi
+        done
+        
+        # List extracted files
+        echo ""
+        echo "📋 Extracted JavaScript files:"
+        if [ "$(ls -A extracted-js/ 2>/dev/null)" ]; then
+          ls -la extracted-js/
+        else
+          echo "No JavaScript files extracted"
+        fi
+    
+    - name: Run ESLint security scan
+      run: |
+        echo "🔍 Running ESLint Security Scan..."
+        echo ""
+        
+        # Check if we have files to scan
+        if [ ! "$(ls -A extracted-js/ 2>/dev/null)" ]; then
+          echo "ℹ️  No JavaScript files to scan"
+          echo "[]" > eslint-results.json
+          exit 0
+        fi
+        
+        echo "Scanning JavaScript files for security issues..."
+        echo ""
+        
+        # Run ESLint with security rules
+        npx eslint extracted-js/ --config .eslintrc-security.json --format json > eslint-results.json || true
+        
+        # Show human-readable results
+        echo "📊 ESLint Security Results:"
+        npx eslint extracted-js/ --config .eslintrc-security.json || echo "Issues found - details above"
+        
+        echo ""
+        echo "📄 Results saved to eslint-results.json"
+    
+    - name: Security code analysis
+      run: |
+        echo "🛡️ Security Code Analysis:"
+        echo "=========================="
+        echo ""
+        
+        # Check for potential security issues
+        echo "🔍 Checking for security anti-patterns..."
+        
+        security_issues=0
+        
+        if grep -r "innerHTML" html/ 2>/dev/null; then
+          echo "⚠️  WARNING: innerHTML usage found - XSS risk"
+          security_issues=$((security_issues + 1))
+        fi
+        
+        if grep -r "document.write" html/ 2>/dev/null; then
+          echo "⚠️  WARNING: document.write usage found - XSS risk"
+          security_issues=$((security_issues + 1))
+        fi
+        
+        if grep -r "eval(" html/ 2>/dev/null; then
+          echo "❌ CRITICAL: eval() usage found - code injection risk"
+          security_issues=$((security_issues + 1))
+        fi
+        
+        if grep -r "Function(" html/ 2>/dev/null; then
+          echo "❌ CRITICAL: Function constructor found - code injection risk"
+          security_issues=$((security_issues + 1))
+        fi
+        
+        echo ""
+        echo "✅ Checking for security best practices..."
+        
+        good_practices=0
+        
+        if grep -r "SecurityValidator" html/ 2>/dev/null; then
+          echo "✅ Input validation class found"
+          good_practices=$((good_practices + 1))
+        fi
+        
+        if grep -r "sanitizeInput" html/ 2>/dev/null; then
+          echo "✅ Input sanitization function found"
+          good_practices=$((good_practices + 1))
+        fi
+        
+        if grep -r "XSS_PATTERNS" html/ 2>/dev/null; then
+          echo "✅ XSS protection patterns found"
+          good_practices=$((good_practices + 1))
+        fi
+        
+        if grep -r "SQL_PATTERNS" html/ 2>/dev/null; then
+          echo "✅ SQL injection protection patterns found"
+          good_practices=$((good_practices + 1))
+        fi
+        
+        if grep -r "OWASP" html/ 2>/dev/null; then
+          echo "✅ OWASP compliance references found"
+          good_practices=$((good_practices + 1))
+        fi
+        
+        echo ""
+        echo "📊 Security Analysis Summary:"
+        echo "============================="
+        echo "Security issues found: $security_issues"
+        echo "Good practices found: $good_practices"
+        
+        if [ $security_issues -eq 0 ] && [ $good_practices -gt 0 ]; then
+          echo "🎉 Excellent! No security issues and good practices implemented"
+        elif [ $security_issues -eq 0 ]; then
+          echo "✅ No critical security issues found"
+        else
+          echo "⚠️  Security improvements recommended"
+        fi
+    
+    - name: Generate security report
+      run: |
+        echo "📋 Generating Security Report..."
+        
+        cat > security-report.md << 'EOF'
+        # ESLint Security Scan Report
+        
+        **Date:** $(date)
+        **Repository:** SIT SSD Practical Test
+        **Scanned by:** ESLint Security Plugin
+        
+        ## Summary
+        
+        - **Files Scanned:** $(find extracted-js/ -name "*.js" 2>/dev/null | wc -l)
+        - **ESLint Rules:** Security-focused configuration
+        - **Status:** $(if [ -s eslint-results.json ] && [ "$(cat eslint-results.json)" != "[]" ]; then echo "Issues Found"; else echo "Clean"; fi)
+        
+        ## Security Features Detected
+        
+        EOF
+        
+        # Add security features to report
+        if grep -q "SecurityValidator" html/* 2>/dev/null; then
+          echo "- ✅ Input validation framework" >> security-report.md
+        fi
+        
+        if grep -q "XSS_PATTERNS" html/* 2>/dev/null; then
+          echo "- ✅ XSS protection patterns" >> security-report.md
+        fi
+        
+        if grep -q "SQL_PATTERNS" html/* 2>/dev/null; then
+          echo "- ✅ SQL injection protection" >> security-report.md
+        fi
+        
+        echo "" >> security-report.md
+        echo "## Recommendations" >> security-report.md
+        echo "" >> security-report.md
+        echo "- Keep security patterns up to date" >> security-report.md
+        echo "- Regular security scanning in CI/CD" >> security-report.md
+        echo "- Follow OWASP security guidelines" >> security-report.md
+        
+        echo "✅ Security report generated: security-report.md"
+    
+    - name: Upload ESLint results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: eslint-security-results
+        path: |
+          eslint-results.json
+          security-report.md
+          extracted-js/
+          .eslintrc-security.json
+    
+    - name: Final security summary
+      run: |
+        echo ""
+        echo "🎯 ESLint Security Scanning Complete!"
+        echo "====================================="
+        echo ""
+        echo "📊 Scan Results:"
+        if [ -s eslint-results.json ] && [ "$(cat eslint-results.json)" != "[]" ]; then
+          echo "   ESLint found issues - check logs above"
+        else
+          echo "   ✅ No ESLint security issues detected"
+        fi
+        echo ""
+        echo "📁 Artifacts Generated:"
+        echo "   - eslint-results.json (detailed results)"
+        echo "   - security-report.md (summary report)"
+        echo "   - extracted-js/ (scanned JavaScript files)"
+        echo ""
+        echo "💡 Next Steps:"
+        echo "   1. Download artifacts from GitHub Actions"
+        echo "   2. Review any security recommendations"
+        echo "   3. Update code if issues found"
+        echo "   4. Re-run scan after fixes"
