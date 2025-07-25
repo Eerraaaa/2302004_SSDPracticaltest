@@ -22,20 +22,47 @@ jobs:
     - name: Wait for services
       run: sleep 30
     
-    - name: Test web server
+    - name: Test web server health (no auth)
       run: curl -f http://127.0.0.1/health
     
-    - name: Test homepage
-      run: curl -f http://127.0.0.1/
+    - name: Test homepage with authentication
+      run: curl -f -u "admin:2302004@SIT.singaporetech.edu.sg" http://127.0.0.1/
+    
+    - name: Test results page with authentication
+      run: curl -f -u "admin:2302004@SIT.singaporetech.edu.sg" "http://127.0.0.1/results.html?q=test"
     
     - name: Test Git server
       run: curl -f http://127.0.0.1:3000/
     
-    - name: Check security features
+    - name: Check security features in homepage
       run: |
-        curl -s http://127.0.0.1/ | grep -q "SecurityValidator"
-        curl -s http://127.0.0.1/ | grep -q "XSS_PATTERNS"
-        curl -s http://127.0.0.1/ | grep -q "SQL_PATTERNS"
+        homepage=$(curl -s -u "admin:2302004@SIT.singaporetech.edu.sg" http://127.0.0.1/)
+        echo "$homepage" | grep -q "SecurityValidator" && echo "✅ SecurityValidator found"
+        echo "$homepage" | grep -q "XSS_PATTERNS" && echo "✅ XSS protection found" 
+        echo "$homepage" | grep -q "SQL_PATTERNS" && echo "✅ SQL injection protection found"
+        echo "$homepage" | grep -q "OWASP C5" && echo "✅ OWASP C5 compliance found"
+    
+    - name: Test authentication is enforced
+      run: |
+        # This should fail with 401
+        if curl -f http://127.0.0.1/ 2>/dev/null; then
+          echo "❌ ERROR: Authentication bypass detected!"
+          exit 1
+        else
+          echo "✅ Authentication properly enforced"
+        fi
+    
+    - name: Show container status
+      if: always()
+      run: docker compose ps
+    
+    - name: Show logs if needed
+      if: failure()
+      run: |
+        echo "=== Web Server Logs ==="
+        docker compose logs webserver
+        echo "=== Git Server Logs ==="
+        docker compose logs gitserver
     
     - name: Cleanup
       if: always()
